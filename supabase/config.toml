@@ -1,1 +1,4 @@
 project_id = "bsaihjzdrgjpwynavpae"
+
+[functions.compare-faces]
+verify_jwt = false

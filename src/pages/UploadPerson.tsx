@@ -6,10 +6,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
 
 export default function UploadPerson() {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     age: "",
@@ -18,8 +21,24 @@ export default function UploadPerson() {
     contactInfo: "",
   });
   const [image, setImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setImage(file);
+    
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setImagePreview(null);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!image) {
@@ -31,12 +50,58 @@ export default function UploadPerson() {
       return;
     }
 
-    toast({
-      title: "Success",
-      description: "Missing person report submitted successfully",
-    });
-    
-    navigate("/missing-persons");
+    setIsSubmitting(true);
+
+    try {
+      // Upload image to storage
+      const fileExt = image.name.split(".").pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from("person-images")
+        .upload(fileName, image);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("person-images")
+        .getPublicUrl(fileName);
+
+      // Insert missing person record
+      const { error: insertError } = await supabase
+        .from("missing_persons")
+        .insert({
+          name: formData.name,
+          age: parseInt(formData.age),
+          description: formData.description,
+          last_seen_location: formData.lastSeenLocation,
+          contact_info: formData.contactInfo,
+          image_url: urlData.publicUrl,
+        });
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      toast({
+        title: "Success",
+        description: "Missing person report submitted successfully",
+      });
+      
+      navigate("/missing-persons");
+    } catch (error) {
+      console.error("Error submitting report:", error);
+      toast({
+        title: "Error",
+        description: "Failed to submit report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -121,21 +186,32 @@ export default function UploadPerson() {
                 type="file"
                 required
                 accept="image/*"
-                onChange={(e) => setImage(e.target.files?.[0] || null)}
+                onChange={handleImageChange}
               />
               <p className="text-sm text-muted-foreground">
                 Upload a clear, recent photo of the missing person
               </p>
+              {imagePreview && (
+                <div className="mt-4">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="max-w-[200px] rounded-lg border"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex gap-4 pt-4">
-              <Button type="submit" className="flex-1">
-                Submit Report
+              <Button type="submit" className="flex-1" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? "Submitting..." : "Submit Report"}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => navigate("/missing-persons")}
+                disabled={isSubmitting}
               >
                 Cancel
               </Button>
