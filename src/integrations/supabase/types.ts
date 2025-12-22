@@ -14,7 +14,134 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          id: string
+          is_read: boolean
+          match_id: string
+          message: string
+          missing_person_id: string
+        }
+        Insert: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          match_id: string
+          message: string
+          missing_person_id: string
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          match_id?: string
+          message?: string
+          missing_person_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_missing_person_id_fkey"
+            columns: ["missing_person_id"]
+            isOneToOne: false
+            referencedRelation: "missing_persons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matches: {
+        Row: {
+          confidence_score: number
+          created_at: string
+          detected_at: string
+          frame_url: string | null
+          id: string
+          location: string | null
+          missing_person_id: string
+          status: string
+          video_filename: string | null
+        }
+        Insert: {
+          confidence_score: number
+          created_at?: string
+          detected_at?: string
+          frame_url?: string | null
+          id?: string
+          location?: string | null
+          missing_person_id: string
+          status?: string
+          video_filename?: string | null
+        }
+        Update: {
+          confidence_score?: number
+          created_at?: string
+          detected_at?: string
+          frame_url?: string | null
+          id?: string
+          location?: string | null
+          missing_person_id?: string
+          status?: string
+          video_filename?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matches_missing_person_id_fkey"
+            columns: ["missing_person_id"]
+            isOneToOne: false
+            referencedRelation: "missing_persons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      missing_persons: {
+        Row: {
+          age: number
+          contact_info: string
+          created_at: string
+          description: string
+          id: string
+          image_url: string
+          last_seen_location: string
+          name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          age: number
+          contact_info: string
+          created_at?: string
+          description: string
+          id?: string
+          image_url: string
+          last_seen_location: string
+          name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          age?: number
+          contact_info?: string
+          created_at?: string
+          description?: string
+          id?: string
+          image_url?: string
+          last_seen_location?: string
+          name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
