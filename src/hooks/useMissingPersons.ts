@@ -35,9 +35,28 @@ export function useMissingPersons() {
     setLoading(false);
   };
 
+  const deleteMissingPerson = async (id: string, imageUrl: string) => {
+    // Extract file path from URL to delete from storage
+    const urlParts = imageUrl.split("/person-images/");
+    if (urlParts.length > 1) {
+      const filePath = urlParts[1];
+      await supabase.storage.from("person-images").remove([filePath]);
+    }
+
+    const { error } = await supabase
+      .from("missing_persons")
+      .delete()
+      .eq("id", id);
+
+    if (!error) {
+      setMissingPersons((prev) => prev.filter((p) => p.id !== id));
+    }
+    return error;
+  };
+
   useEffect(() => {
     fetchMissingPersons();
   }, []);
 
-  return { missingPersons, loading, error, refetch: fetchMissingPersons };
+  return { missingPersons, loading, error, refetch: fetchMissingPersons, deleteMissingPerson };
 }

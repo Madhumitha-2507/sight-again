@@ -1,23 +1,52 @@
-import { Users, Camera, AlertCircle, CheckCircle, Bell } from "lucide-react";
+import { Users, Camera, AlertCircle, CheckCircle, Bell, Trash2 } from "lucide-react";
 import { StatCard } from "@/components/StatCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
-import { useMissingPersons } from "@/hooks/useMissingPersons";
+import { useMissingPersons, MissingPerson } from "@/hooks/useMissingPersons";
 import { useMatches } from "@/hooks/useMatches";
 import { useAlerts } from "@/hooks/useAlerts";
 import { formatDistanceToNow } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { missingPersons } = useMissingPersons();
+  const { toast } = useToast();
+  const { missingPersons, deleteMissingPerson } = useMissingPersons();
   const { matches } = useMatches();
   const { alerts, unreadCount } = useAlerts();
 
   const activeCases = missingPersons.filter((p) => p.status === "active").length;
   const pendingMatches = matches.filter((m) => m.status === "pending" || m.status === "high_priority").length;
   const resolvedCases = missingPersons.filter((p) => p.status === "resolved").length;
+
+  const handleDelete = async (person: MissingPerson) => {
+    const error = await deleteMissingPerson(person.id, person.image_url);
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete person. Please try again.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Deleted",
+        description: `${person.name} has been removed from the database.`,
+      });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -74,12 +103,35 @@ export default function Dashboard() {
             <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {missingPersons.slice(0, 10).map((person) => (
                 <div key={person.id} className="relative group">
-                  <div className="aspect-square rounded-lg overflow-hidden border bg-muted">
+                  <div className="aspect-square rounded-lg overflow-hidden border bg-muted relative">
                     <img
                       src={person.image_url}
                       alt={person.name}
                       className="w-full h-full object-cover transition-transform group-hover:scale-105"
                     />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete {person.name}?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the person's record and their image.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(person)}>Delete</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                   <div className="mt-2">
                     <p className="font-medium text-sm truncate">{person.name}</p>

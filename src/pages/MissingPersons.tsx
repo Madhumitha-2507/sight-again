@@ -1,18 +1,47 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, MapPin, Phone, Calendar } from "lucide-react";
+import { Plus, MapPin, Phone, Calendar, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useMissingPersons } from "@/hooks/useMissingPersons";
+import { useMissingPersons, MissingPerson } from "@/hooks/useMissingPersons";
 import { formatDistanceToNow } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function MissingPersons() {
   const navigate = useNavigate();
-  const { missingPersons, loading } = useMissingPersons();
+  const { toast } = useToast();
+  const { missingPersons, loading, deleteMissingPerson } = useMissingPersons();
 
   const activeCases = missingPersons.filter((p) => p.status === "active");
   const resolvedCases = missingPersons.filter((p) => p.status === "resolved");
+
+  const handleDelete = async (person: MissingPerson) => {
+    const error = await deleteMissingPerson(person.id, person.image_url);
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete person. Please try again.",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Deleted",
+        description: `${person.name} has been removed from the database.`,
+      });
+    }
+  };
 
   if (loading) {
     return (
@@ -64,7 +93,7 @@ export default function MissingPersons() {
           {activeCases.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {activeCases.map((person) => (
-                <PersonCard key={person.id} person={person} />
+                <PersonCard key={person.id} person={person} onDelete={handleDelete} />
               ))}
             </div>
           ) : (
@@ -85,7 +114,7 @@ export default function MissingPersons() {
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {resolvedCases.map((person) => (
-                <PersonCard key={person.id} person={person} />
+                <PersonCard key={person.id} person={person} onDelete={handleDelete} />
               ))}
             </div>
           </CardContent>
@@ -95,7 +124,7 @@ export default function MissingPersons() {
   );
 }
 
-function PersonCard({ person }: { person: any }) {
+function PersonCard({ person, onDelete }: { person: MissingPerson; onDelete: (person: MissingPerson) => void }) {
   return (
     <Card className="overflow-hidden group">
       <div className="aspect-square relative overflow-hidden bg-muted">
@@ -110,6 +139,29 @@ function PersonCard({ person }: { person: any }) {
         >
           {person.status}
         </Badge>
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="destructive"
+              size="icon"
+              className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {person.name}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the person's record and their image from the database.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => onDelete(person)}>Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
       <CardContent className="p-4">
         <h3 className="font-semibold text-lg">{person.name}</h3>
