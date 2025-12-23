@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Play, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, Play, Loader2, CheckCircle, AlertCircle, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMissingPersons } from "@/hooks/useMissingPersons";
 import { Badge } from "@/components/ui/badge";
@@ -177,13 +177,29 @@ export default function CCTVMonitor() {
             </div>
 
             {video && (
-              <div className="rounded-lg border overflow-hidden bg-muted">
-                <video
-                  ref={videoRef}
-                  src={URL.createObjectURL(video)}
-                  className="w-full max-h-[200px] object-contain"
-                  controls
-                />
+              <div className="space-y-2">
+                <div className="rounded-lg border overflow-hidden bg-muted">
+                  <video
+                    ref={videoRef}
+                    src={URL.createObjectURL(video)}
+                    className="w-full max-h-[200px] object-contain"
+                    controls
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setVideo(null);
+                    setResults([]);
+                    setProgress(0);
+                  }}
+                  disabled={isProcessing}
+                  className="w-full text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Remove Video
+                </Button>
               </div>
             )}
 
