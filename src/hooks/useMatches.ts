@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { playAlarmSound } from "@/utils/alarmSound";
 
 export interface Match {
   id: string;
@@ -84,6 +85,8 @@ export function useMatches() {
 
           if (data) {
             setMatches((prev) => [data, ...prev]);
+            // Play alarm sound when new match is detected
+            playAlarmSound();
           }
         }
       )
