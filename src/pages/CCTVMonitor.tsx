@@ -2,13 +2,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Play, Loader2, CheckCircle, AlertCircle, Trash2 } from "lucide-react";
+import { Upload, Loader2, CheckCircle, AlertCircle, Trash2, Users, Scan } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMissingPersons } from "@/hooks/useMissingPersons";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { extractFacesFromMultipleFrames, loadFaceDetectionModels, DetectedFace } from "@/utils/faceDetection";
 
 export default function CCTVMonitor() {
   const { toast } = useToast();
@@ -16,44 +17,19 @@ export default function CCTVMonitor() {
   const [video, setVideo] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [progressMessage, setProgressMessage] = useState("");
   const [results, setResults] = useState<any[]>([]);
+  const [detectedFaces, setDetectedFaces] = useState<DetectedFace[]>([]);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const extractFrameFromVideo = (videoFile: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      
-      video.onloadedmetadata = () => {
-        // Seek to 1 second or middle of video
-        video.currentTime = Math.min(1, video.duration / 2);
-      };
-
-      video.onseeked = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext("2d");
-        
-        if (ctx) {
-          ctx.drawImage(video, 0, 0);
-          const base64 = canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
-          resolve(base64);
-        } else {
-          reject(new Error("Could not get canvas context"));
-        }
-        
-        URL.revokeObjectURL(video.src);
-      };
-
-      video.onerror = () => {
-        reject(new Error("Could not load video"));
-      };
-
-      video.src = URL.createObjectURL(videoFile);
-    });
-  };
+  // Preload face detection models on mount
+  useEffect(() => {
+    loadFaceDetectionModels()
+      .then(() => setModelsLoaded(true))
+      .catch(console.error);
+  }, []);
 
   const handleUpload = async () => {
     if (!video) {
@@ -77,50 +53,85 @@ export default function CCTVMonitor() {
     setIsProcessing(true);
     setProgress(0);
     setResults([]);
+    setDetectedFaces([]);
+    setProgressMessage("Starting analysis...");
 
     try {
-      // Extract frame from video
-      setProgress(20);
-      toast({
-        title: "Processing",
-        description: "Extracting frames from video...",
-      });
+      // Extract faces from multiple frames
+      setProgress(10);
+      setProgressMessage("Extracting frames from video...");
 
-      const frameBase64 = await extractFrameFromVideo(video);
+      const { allFaces, frameBase64 } = await extractFacesFromMultipleFrames(
+        video,
+        5, // Analyze 5 frames for better coverage
+        (message) => setProgressMessage(message)
+      );
+
+      setDetectedFaces(allFaces);
       setProgress(40);
 
-      toast({
-        title: "Analyzing",
-        description: "AI is comparing faces with missing person database...",
-      });
-
-      // Call AI comparison function
-      const { data, error } = await supabase.functions.invoke("compare-faces", {
-        body: {
-          videoFrameBase64: frameBase64,
-          videoFilename: video.name,
-          location: "Uploaded via web interface",
-        },
-      });
-
-      setProgress(100);
-
-      if (error) {
-        throw error;
+      if (allFaces.length === 0) {
+        toast({
+          title: "No Faces Detected",
+          description: "No faces were detected in the video. Try a different video with clearer faces.",
+          variant: "destructive",
+        });
+        setIsProcessing(false);
+        return;
       }
 
-      setResults(data.matches || []);
+      toast({
+        title: "Faces Detected",
+        description: `Found ${allFaces.length} face(s) in the video. Comparing with database...`,
+      });
 
-      if (data.matches && data.matches.length > 0) {
+      setProgressMessage(`Comparing ${allFaces.length} detected face(s) with database...`);
+
+      // Compare each detected face with missing persons
+      const allMatches: any[] = [];
+      
+      for (let i = 0; i < allFaces.length; i++) {
+        const face = allFaces[i];
+        setProgress(40 + (i / allFaces.length) * 50);
+        setProgressMessage(`Analyzing face ${i + 1}/${allFaces.length}...`);
+
+        try {
+          const { data, error } = await supabase.functions.invoke("compare-faces", {
+            body: {
+              videoFrameBase64: face.faceImage,
+              videoFilename: video.name,
+              location: "Uploaded via web interface",
+              faceIndex: i + 1,
+              totalFaces: allFaces.length,
+            },
+          });
+
+          if (error) {
+            console.error(`Error comparing face ${i + 1}:`, error);
+            continue;
+          }
+
+          if (data.matches && data.matches.length > 0) {
+            allMatches.push(...data.matches);
+          }
+        } catch (err) {
+          console.error(`Error processing face ${i + 1}:`, err);
+        }
+      }
+
+      setProgress(100);
+      setResults(allMatches);
+
+      if (allMatches.length > 0) {
         toast({
           title: "🚨 Matches Found!",
-          description: `Found ${data.matches.length} potential match(es)! Check the Matches page for details.`,
+          description: `Found ${allMatches.length} potential match(es) from ${allFaces.length} faces! Check the Matches page for details.`,
           variant: "destructive",
         });
       } else {
         toast({
           title: "Analysis Complete",
-          description: "No matches found in this footage.",
+          description: `Analyzed ${allFaces.length} face(s). No matches found.`,
         });
       }
     } catch (error) {
@@ -132,6 +143,7 @@ export default function CCTVMonitor() {
       });
     } finally {
       setIsProcessing(false);
+      setProgressMessage("");
     }
   };
 
@@ -140,7 +152,7 @@ export default function CCTVMonitor() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">CCTV Monitor</h1>
         <p className="text-muted-foreground">
-          Upload and analyze CCTV footage for missing person detection using AI
+          Upload and analyze CCTV footage for missing person detection using AI-powered face recognition
         </p>
       </div>
 
@@ -156,12 +168,22 @@ export default function CCTVMonitor() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Upload CCTV Footage</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Scan className="h-5 w-5" />
+              Upload CCTV Footage
+            </CardTitle>
             <CardDescription>
-              Upload video files to analyze for missing person matches using AI face recognition
+              Upload video files to analyze for missing person matches. Works with crowded scenes!
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {!modelsLoaded && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading face detection models...
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="video">Video File</Label>
               <Input
@@ -192,6 +214,7 @@ export default function CCTVMonitor() {
                   onClick={() => {
                     setVideo(null);
                     setResults([]);
+                    setDetectedFaces([]);
                     setProgress(0);
                   }}
                   disabled={isProcessing}
@@ -207,14 +230,14 @@ export default function CCTVMonitor() {
               <div className="space-y-2">
                 <Progress value={progress} className="h-2" />
                 <p className="text-sm text-muted-foreground text-center">
-                  {progress < 40 ? "Extracting frames..." : "AI analyzing faces..."}
+                  {progressMessage}
                 </p>
               </div>
             )}
 
             <Button 
               onClick={handleUpload} 
-              disabled={!video || isProcessing || missingPersons.length === 0}
+              disabled={!video || isProcessing || missingPersons.length === 0 || !modelsLoaded}
               className="w-full"
             >
               {isProcessing ? (
@@ -234,12 +257,39 @@ export default function CCTVMonitor() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Analysis Status</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Analysis Status
+            </CardTitle>
             <CardDescription>
-              Current database: {missingPersons.length} missing person(s)
+              Database: {missingPersons.length} missing person(s) | 
+              {detectedFaces.length > 0 && ` Detected: ${detectedFaces.length} face(s)`}
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {detectedFaces.length > 0 && results.length === 0 && !isProcessing && (
+              <div className="mb-4 p-3 bg-muted rounded-lg">
+                <p className="text-sm font-medium mb-2">Detected Faces ({detectedFaces.length})</p>
+                <div className="flex flex-wrap gap-2">
+                  {detectedFaces.map((face, index) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={`data:image/jpeg;base64,${face.faceImage}`}
+                        alt={`Face ${index + 1}`}
+                        className="w-12 h-12 rounded-lg object-cover border-2 border-muted-foreground/20"
+                      />
+                      <Badge 
+                        variant="secondary" 
+                        className="absolute -bottom-1 -right-1 text-[10px] px-1"
+                      >
+                        {Math.round(face.confidence * 100)}%
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {results.length > 0 ? (
               <div className="space-y-4">
                 {results.map((result, index) => (
@@ -264,11 +314,11 @@ export default function CCTVMonitor() {
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Play className="h-12 w-12 text-muted-foreground mb-4" />
+                <Scan className="h-12 w-12 text-muted-foreground mb-4" />
                 <p className="text-muted-foreground">
                   {isProcessing
-                    ? "AI is analyzing the footage..."
-                    : "Upload a video to start AI face detection"}
+                    ? "AI is detecting and analyzing faces..."
+                    : "Upload a video to detect faces in crowded scenes"}
                 </p>
               </div>
             )}
@@ -281,34 +331,43 @@ export default function CCTVMonitor() {
       <Card>
         <CardHeader>
           <CardTitle>How It Works</CardTitle>
-          <CardDescription>AI-powered face recognition process</CardDescription>
+          <CardDescription>AI-powered multi-face detection for crowded videos</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="flex items-start gap-3">
               <div className="bg-primary/10 rounded-full p-2 text-primary font-bold">1</div>
               <div>
                 <p className="font-medium">Upload Video</p>
                 <p className="text-sm text-muted-foreground">
-                  Upload CCTV footage in MP4, AVI, or other formats
+                  Upload CCTV footage with crowds
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <div className="bg-primary/10 rounded-full p-2 text-primary font-bold">2</div>
               <div>
-                <p className="font-medium">AI Analysis</p>
+                <p className="font-medium">Face Detection</p>
                 <p className="text-sm text-muted-foreground">
-                  AI extracts faces and compares with missing persons database
+                  AI detects all faces in multiple frames
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <div className="bg-primary/10 rounded-full p-2 text-primary font-bold">3</div>
               <div>
+                <p className="font-medium">Face Comparison</p>
+                <p className="text-sm text-muted-foreground">
+                  Each face is compared with database
+                </p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="bg-primary/10 rounded-full p-2 text-primary font-bold">4</div>
+              <div>
                 <p className="font-medium">Get Alerts</p>
                 <p className="text-sm text-muted-foreground">
-                  Receive instant alerts when potential matches are found
+                  Instant alerts for matches found
                 </p>
               </div>
             </div>
