@@ -10,6 +10,7 @@ import MissingPersons from "./pages/MissingPersons";
 import UploadPerson from "./pages/UploadPerson";
 import CCTVMonitor from "./pages/CCTVMonitor";
 import Matches from "./pages/Matches";
+import HowItWorks from "./pages/HowItWorks";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
                   <Route path="/upload" element={<UploadPerson />} />
                   <Route path="/cctv" element={<CCTVMonitor />} />
                   <Route path="/matches" element={<Matches />} />
+                  <Route path="/how-it-works" element={<HowItWorks />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
