@@ -1,4 +1,4 @@
-import { Home, Users, Camera, AlertCircle, Upload } from "lucide-react";
+import { Home, Users, Camera, AlertCircle, Upload, BookOpen } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -18,6 +18,7 @@ const items = [
   { title: "Upload Person", url: "/upload", icon: Upload },
   { title: "CCTV Monitor", url: "/cctv", icon: Camera },
   { title: "Matches & Alerts", url: "/matches", icon: AlertCircle },
+  { title: "How It Works", url: "/how-it-works", icon: BookOpen },
 ];
 
 export function AppSidebar() {
