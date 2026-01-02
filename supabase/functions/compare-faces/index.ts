@@ -64,23 +64,31 @@ serve(async (req) => {
           messages: [
             {
               role: "system",
-              content: `You are an expert face recognition system. Your task is to compare two images and determine if they show the same person. 
-              
-              Analyze facial features carefully including:
-              - Face shape and structure
-              - Eye shape, color, and spacing
-              - Nose shape and size
-              - Mouth and lip shape
-              - Ear shape (if visible)
-              - Hair style and color
-              - Any distinctive features like moles, scars, or birthmarks
-              
-              Respond with a JSON object containing:
-              - "is_match": boolean (true if likely the same person)
-              - "confidence": number between 0 and 100
-              - "reasoning": brief explanation of your analysis
-              
-              Be conservative in matching - only return high confidence for clear matches.`,
+              content: `You are an expert face recognition system specialized in identifying missing persons from surveillance footage. Your task is to compare a reference photo of a missing person with a face detected from CCTV footage.
+
+IMPORTANT: The CCTV image may be lower quality, have different lighting, angles, or partial occlusion. Focus on CONSISTENT features that remain recognizable across different conditions:
+
+Key features to analyze:
+- Overall face SHAPE (oval, round, square, heart-shaped)
+- Eye SPACING and general shape (close-set, wide-set, almond, round)
+- Nose STRUCTURE (bridge shape, tip shape, nostril width)
+- Mouth and lip PROPORTIONS
+- Forehead HEIGHT and hairline pattern
+- Jawline and chin SHAPE
+- Eyebrow SHAPE and thickness
+- Any PERMANENT distinctive features (moles, scars, birthmarks)
+
+DO NOT penalize for:
+- Different lighting or image quality
+- Slightly different angles
+- Different expressions
+- Minor blur in CCTV footage
+- Hair being styled differently
+
+Respond with ONLY a JSON object (no markdown):
+{"is_match": boolean, "confidence": number 0-100, "reasoning": "brief explanation"}
+
+Be GENEROUS in matching if core facial structure appears similar - it's better to flag a potential match for human review than to miss a missing person.`,
             },
             {
               role: "user",
@@ -120,7 +128,8 @@ serve(async (req) => {
         if (jsonMatch) {
           const analysisResult = JSON.parse(jsonMatch[0]);
 
-          if (analysisResult.is_match && analysisResult.confidence >= 60) {
+          // Lower threshold to 40% to catch more potential matches for human review
+          if (analysisResult.is_match && analysisResult.confidence >= 40) {
             console.log(`Match found for ${person.name} with confidence ${analysisResult.confidence}%`);
 
             // Create match record
@@ -131,7 +140,7 @@ serve(async (req) => {
                 confidence_score: analysisResult.confidence,
                 video_filename: videoFilename,
                 location: location || "Unknown",
-                status: analysisResult.confidence >= 80 ? "high_priority" : "pending",
+                status: analysisResult.confidence >= 70 ? "high_priority" : "pending",
               })
               .select()
               .single();
@@ -145,7 +154,7 @@ serve(async (req) => {
             const { error: alertError } = await supabase.from("alerts").insert({
               match_id: matchData.id,
               missing_person_id: person.id,
-              alert_type: analysisResult.confidence >= 80 ? "high_priority_match" : "potential_match",
+              alert_type: analysisResult.confidence >= 70 ? "high_priority_match" : "potential_match",
               message: `Potential match detected for ${person.name} with ${analysisResult.confidence}% confidence. ${analysisResult.reasoning}`,
             });
 
