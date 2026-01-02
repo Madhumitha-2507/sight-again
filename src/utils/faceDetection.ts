@@ -55,20 +55,35 @@ export const detectAndExtractFaces = async (
   for (const detection of detections) {
     const box = detection.detection.box;
     
-    // Add padding around the face
-    const padding = 0.3;
+    // Add more padding around the face for better context
+    const padding = 0.5;
     const paddedX = Math.max(0, box.x - box.width * padding);
     const paddedY = Math.max(0, box.y - box.height * padding);
-    const paddedWidth = box.width * (1 + padding * 2);
-    const paddedHeight = box.height * (1 + padding * 2);
+    
+    // Get source dimensions
+    const sourceWidth = 'videoWidth' in imageElement ? imageElement.videoWidth : imageElement.width;
+    const sourceHeight = 'videoHeight' in imageElement ? imageElement.videoHeight : imageElement.height;
+    
+    const paddedWidth = Math.min(box.width * (1 + padding * 2), sourceWidth - paddedX);
+    const paddedHeight = Math.min(box.height * (1 + padding * 2), sourceHeight - paddedY);
 
-    // Create canvas for face extraction
+    // Upscale small faces to minimum 256x256 for better AI analysis
+    const minSize = 256;
+    const scale = Math.max(1, minSize / Math.min(paddedWidth, paddedHeight));
+    const outputWidth = Math.round(paddedWidth * scale);
+    const outputHeight = Math.round(paddedHeight * scale);
+
+    // Create canvas for face extraction with upscaling
     const canvas = document.createElement('canvas');
-    canvas.width = paddedWidth;
-    canvas.height = paddedHeight;
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
     const ctx = canvas.getContext('2d');
 
     if (ctx) {
+      // Enable image smoothing for better upscaling quality
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
       ctx.drawImage(
         imageElement,
         paddedX,
@@ -77,11 +92,12 @@ export const detectAndExtractFaces = async (
         paddedHeight,
         0,
         0,
-        paddedWidth,
-        paddedHeight
+        outputWidth,
+        outputHeight
       );
 
-      const faceBase64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+      // Use higher quality JPEG encoding
+      const faceBase64 = canvas.toDataURL('image/jpeg', 0.95).split(',')[1];
       
       faces.push({
         faceImage: faceBase64,
