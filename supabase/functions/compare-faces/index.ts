@@ -52,6 +52,18 @@ serve(async (req) => {
     for (const person of missingPersons) {
       console.log(`Analyzing frame against missing person: ${person.name}`);
 
+      // Build appearance context from database fields
+      const appearanceDetails = [];
+      if (person.height_cm) appearanceDetails.push(`Height: approximately ${person.height_cm}cm`);
+      if (person.build) appearanceDetails.push(`Build: ${person.build}`);
+      if (person.hair_color) appearanceDetails.push(`Hair color: ${person.hair_color}`);
+      if (person.clothing_description) appearanceDetails.push(`Last known clothing: ${person.clothing_description}`);
+      if (person.distinctive_features) appearanceDetails.push(`Distinctive features: ${person.distinctive_features}`);
+      
+      const appearanceContext = appearanceDetails.length > 0 
+        ? `\n\nKnown physical attributes:\n${appearanceDetails.join('\n')}`
+        : '';
+
       // Use AI to compare the video frame with the missing person's image
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -64,38 +76,42 @@ serve(async (req) => {
           messages: [
             {
               role: "system",
-              content: `You are an expert face recognition system specialized in identifying missing persons from surveillance footage. Your task is to compare a reference photo of a missing person with a face detected from CCTV footage.
+              content: `You are an expert person recognition system specialized in identifying missing persons from surveillance footage. Your task is to compare a reference photo and physical description of a missing person with a person detected from CCTV footage.
 
-IMPORTANT: The CCTV image may be lower quality, have different lighting, angles, or partial occlusion. Focus on CONSISTENT features that remain recognizable across different conditions:
+IMPORTANT: Analyze BOTH facial features AND physical appearance attributes.
 
-Key features to analyze:
+FACIAL FEATURES to analyze:
 - Overall face SHAPE (oval, round, square, heart-shaped)
-- Eye SPACING and general shape (close-set, wide-set, almond, round)
-- Nose STRUCTURE (bridge shape, tip shape, nostril width)
+- Eye SPACING and general shape
+- Nose STRUCTURE (bridge shape, tip shape)
 - Mouth and lip PROPORTIONS
 - Forehead HEIGHT and hairline pattern
 - Jawline and chin SHAPE
-- Eyebrow SHAPE and thickness
 - Any PERMANENT distinctive features (moles, scars, birthmarks)
 
-DO NOT penalize for:
-- Different lighting or image quality
-- Slightly different angles
-- Different expressions
-- Minor blur in CCTV footage
-- Hair being styled differently
+PHYSICAL APPEARANCE to analyze:
+- Body BUILD (slim, average, athletic, heavy)
+- Approximate HEIGHT if reference available in frame
+- HAIR COLOR and style
+- CLOTHING colors and type (match against last known clothing)
+- Any DISTINCTIVE FEATURES mentioned (glasses, tattoos, scars, etc.)
+
+MATCHING RULES:
+1. Face match alone with >60% confidence = potential match
+2. Face match + 2 or more physical attributes matching = increase confidence by 15%
+3. Clothing match + build match can indicate potential even with lower face confidence
+4. DO NOT penalize for different lighting, angles, or image quality
+5. Be GENEROUS - it's better to flag for human review than miss a person
 
 Respond with ONLY a JSON object (no markdown):
-{"is_match": boolean, "confidence": number 0-100, "reasoning": "brief explanation"}
-
-Be GENEROUS in matching if core facial structure appears similar - it's better to flag a potential match for human review than to miss a missing person.`,
+{"is_match": boolean, "confidence": number 0-100, "face_similarity": number 0-100, "appearance_match": number 0-100, "reasoning": "brief explanation including what matched"}`,
             },
             {
               role: "user",
               content: [
                 {
                   type: "text",
-                  text: `Compare these two images. The first is a missing person named ${person.name}, age ${person.age}. The second is a frame from CCTV footage. Determine if they could be the same person.`,
+                  text: `Compare these two images. The first is a missing person named ${person.name}, age ${person.age}.${appearanceContext}\n\nThe second is a frame from CCTV footage. Determine if they could be the same person by analyzing BOTH facial features AND physical appearance.`,
                 },
                 {
                   type: "image_url",

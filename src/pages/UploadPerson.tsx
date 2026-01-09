@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -19,6 +20,11 @@ export default function UploadPerson() {
     description: "",
     lastSeenLocation: "",
     contactInfo: "",
+    heightCm: "",
+    build: "",
+    hairColor: "",
+    clothingDescription: "",
+    distinctiveFeatures: "",
   });
   const [image, setImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -80,6 +86,11 @@ export default function UploadPerson() {
           last_seen_location: formData.lastSeenLocation,
           contact_info: formData.contactInfo,
           image_url: urlData.publicUrl,
+          height_cm: formData.heightCm ? parseInt(formData.heightCm) : null,
+          build: formData.build || null,
+          hair_color: formData.hairColor || null,
+          clothing_description: formData.clothingDescription || null,
+          distinctive_features: formData.distinctiveFeatures || null,
         });
 
       if (insertError) {
@@ -146,15 +157,92 @@ export default function UploadPerson() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
+              <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                required
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Physical description, clothing, distinguishing features..."
-                rows={4}
+                placeholder="Additional details about the person..."
+                rows={3}
               />
+            </div>
+
+            <div className="border-t pt-4 mt-4">
+              <h3 className="font-medium mb-4">Physical Appearance (for better matching)</h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="heightCm">Height (cm)</Label>
+                  <Input
+                    id="heightCm"
+                    type="number"
+                    value={formData.heightCm}
+                    onChange={(e) => setFormData({ ...formData, heightCm: e.target.value })}
+                    placeholder="e.g., 165"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="build">Build</Label>
+                  <Select
+                    value={formData.build}
+                    onValueChange={(value) => setFormData({ ...formData, build: value })}
+                  >
+                    <SelectTrigger id="build">
+                      <SelectValue placeholder="Select build" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="slim">Slim</SelectItem>
+                      <SelectItem value="average">Average</SelectItem>
+                      <SelectItem value="athletic">Athletic</SelectItem>
+                      <SelectItem value="heavy">Heavy</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="hairColor">Hair Color</Label>
+                  <Select
+                    value={formData.hairColor}
+                    onValueChange={(value) => setFormData({ ...formData, hairColor: value })}
+                  >
+                    <SelectTrigger id="hairColor">
+                      <SelectValue placeholder="Select hair color" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="black">Black</SelectItem>
+                      <SelectItem value="brown">Brown</SelectItem>
+                      <SelectItem value="blonde">Blonde</SelectItem>
+                      <SelectItem value="red">Red</SelectItem>
+                      <SelectItem value="gray">Gray</SelectItem>
+                      <SelectItem value="white">White</SelectItem>
+                      <SelectItem value="bald">Bald</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="clothingDescription">Last Known Clothing</Label>
+                <Textarea
+                  id="clothingDescription"
+                  value={formData.clothingDescription}
+                  onChange={(e) => setFormData({ ...formData, clothingDescription: e.target.value })}
+                  placeholder="e.g., Red jacket, blue jeans, white sneakers..."
+                  rows={2}
+                />
+              </div>
+
+              <div className="space-y-2 mt-4">
+                <Label htmlFor="distinctiveFeatures">Distinctive Features</Label>
+                <Textarea
+                  id="distinctiveFeatures"
+                  value={formData.distinctiveFeatures}
+                  onChange={(e) => setFormData({ ...formData, distinctiveFeatures: e.target.value })}
+                  placeholder="e.g., Scar on left cheek, tattoo on arm, wears glasses..."
+                  rows={2}
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
