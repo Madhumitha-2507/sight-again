@@ -106,9 +106,14 @@ export type Database = {
       missing_persons: {
         Row: {
           age: number
+          build: string | null
+          clothing_description: string | null
           contact_info: string
           created_at: string
           description: string
+          distinctive_features: string | null
+          hair_color: string | null
+          height_cm: number | null
           id: string
           image_url: string
           last_seen_location: string
@@ -118,9 +123,14 @@ export type Database = {
         }
         Insert: {
           age: number
+          build?: string | null
+          clothing_description?: string | null
           contact_info: string
           created_at?: string
           description: string
+          distinctive_features?: string | null
+          hair_color?: string | null
+          height_cm?: number | null
           id?: string
           image_url: string
           last_seen_location: string
@@ -130,9 +140,14 @@ export type Database = {
         }
         Update: {
           age?: number
+          build?: string | null
+          clothing_description?: string | null
           contact_info?: string
           created_at?: string
           description?: string
+          distinctive_features?: string | null
+          hair_color?: string | null
+          height_cm?: number | null
           id?: string
           image_url?: string
           last_seen_location?: string

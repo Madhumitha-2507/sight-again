@@ -12,6 +12,11 @@ export interface MissingPerson {
   status: string;
   created_at: string;
   updated_at: string;
+  height_cm: number | null;
+  build: string | null;
+  hair_color: string | null;
+  clothing_description: string | null;
+  distinctive_features: string | null;
 }
 
 export function useMissingPersons() {
