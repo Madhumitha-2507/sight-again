@@ -61,35 +61,47 @@ export type Database = {
       }
       matches: {
         Row: {
+          analysis_details: Json | null
+          appearance_match: number | null
           confidence_score: number
           created_at: string
           detected_at: string
+          face_similarity: number | null
           frame_url: string | null
           id: string
           location: string | null
           missing_person_id: string
+          reasoning: string | null
           status: string
           video_filename: string | null
         }
         Insert: {
+          analysis_details?: Json | null
+          appearance_match?: number | null
           confidence_score: number
           created_at?: string
           detected_at?: string
+          face_similarity?: number | null
           frame_url?: string | null
           id?: string
           location?: string | null
           missing_person_id: string
+          reasoning?: string | null
           status?: string
           video_filename?: string | null
         }
         Update: {
+          analysis_details?: Json | null
+          appearance_match?: number | null
           confidence_score?: number
           created_at?: string
           detected_at?: string
+          face_similarity?: number | null
           frame_url?: string | null
           id?: string
           location?: string | null
           missing_person_id?: string
+          reasoning?: string | null
           status?: string
           video_filename?: string | null
         }
