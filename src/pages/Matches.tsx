@@ -1,11 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, CheckCircle, Clock, Eye, Bell } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, Eye, Bell, ChevronDown, ChevronUp } from "lucide-react";
 import { useMatches } from "@/hooks/useMatches";
 import { useAlerts } from "@/hooks/useAlerts";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { MatchAnalysisDetails } from "@/components/MatchAnalysisDetails";
+import { useState } from "react";
 
 export default function Matches() {
   const { matches, updateMatchStatus } = useMatches();
@@ -218,10 +220,12 @@ function MatchCard({
   onResolve: () => void;
   onDismiss: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+
   const getStatusBadge = () => {
     switch (match.status) {
       case "resolved":
-        return <Badge variant="secondary" className="bg-green-500/10 text-green-500">Resolved</Badge>;
+        return <Badge variant="secondary" className="bg-primary/10 text-primary">Resolved</Badge>;
       case "dismissed":
         return <Badge variant="secondary">Dismissed</Badge>;
       case "high_priority":
@@ -232,56 +236,102 @@ function MatchCard({
   };
 
   const isActionable = match.status !== "resolved" && match.status !== "dismissed";
+  const hasAnalysisDetails = match.face_similarity || match.appearance_match || match.reasoning || match.analysis_details;
 
   return (
-    <div className="flex items-start gap-4 p-4 rounded-lg border">
-      {match.missing_person?.image_url && (
-        <img
-          src={match.missing_person.image_url}
-          alt={match.missing_person.name}
-          className="w-16 h-16 rounded-lg object-cover"
-        />
+    <div className="rounded-lg border overflow-hidden">
+      <div className="flex items-start gap-4 p-4">
+        {match.missing_person?.image_url && (
+          <img
+            src={match.missing_person.image_url}
+            alt={match.missing_person.name}
+            className="w-16 h-16 rounded-lg object-cover"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-medium">{match.missing_person?.name || "Unknown"}</p>
+            {showStatus && getStatusBadge()}
+          </div>
+          <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+            <span>Overall: {match.confidence_score}%</span>
+            {match.face_similarity && (
+              <>
+                <span>•</span>
+                <span>Face: {match.face_similarity}%</span>
+              </>
+            )}
+            {match.appearance_match && (
+              <>
+                <span>•</span>
+                <span>Appearance: {match.appearance_match}%</span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+            <span>{match.video_filename || "Unknown video"}</span>
+            <span>•</span>
+            <span>Detected {formatDistanceToNow(new Date(match.detected_at), { addSuffix: true })}</span>
+          </div>
+          {match.missing_person && (
+            <div className="mt-2 text-xs text-muted-foreground">
+              <p>Age: {match.missing_person.age} | Last seen: {match.missing_person.last_seen_location}</p>
+            </div>
+          )}
+        </div>
+        <div className="flex flex-col gap-2 items-end">
+          <Badge
+            variant={match.confidence_score >= 80 ? "destructive" : "secondary"}
+          >
+            {match.confidence_score}%
+          </Badge>
+          {isActionable && (
+            <div className="flex flex-col gap-1">
+              <Button size="sm" variant="outline" onClick={onResolve}>
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Resolve
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onDismiss}>
+                <Eye className="h-3 w-3 mr-1" />
+                Dismiss
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Analysis Details Toggle */}
+      {hasAnalysisDetails && (
+        <>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-muted/50 hover:bg-muted transition-colors text-sm text-muted-foreground border-t"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="h-4 w-4" />
+                Hide Analysis Details
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4" />
+                View How Match Was Found
+              </>
+            )}
+          </button>
+          
+          {expanded && (
+            <div className="p-4 border-t bg-muted/20">
+              <MatchAnalysisDetails
+                faceSimilarity={match.face_similarity}
+                appearanceMatch={match.appearance_match}
+                reasoning={match.reasoning}
+                analysisDetails={match.analysis_details}
+              />
+            </div>
+          )}
+        </>
       )}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="font-medium">{match.missing_person?.name || "Unknown"}</p>
-          {showStatus && getStatusBadge()}
-        </div>
-        <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
-          <span>Confidence: {match.confidence_score}%</span>
-          <span>•</span>
-          <span>{match.video_filename || "Unknown video"}</span>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          Detected {formatDistanceToNow(new Date(match.detected_at), { addSuffix: true })}
-        </p>
-        {match.missing_person && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            <p>Age: {match.missing_person.age}</p>
-            <p>Last seen: {match.missing_person.last_seen_location}</p>
-            <p>Contact: {match.missing_person.contact_info}</p>
-          </div>
-        )}
-      </div>
-      <div className="flex flex-col gap-2">
-        <Badge
-          variant={match.confidence_score >= 80 ? "destructive" : "secondary"}
-        >
-          {match.confidence_score}%
-        </Badge>
-        {isActionable && (
-          <div className="flex flex-col gap-1">
-            <Button size="sm" variant="outline" onClick={onResolve}>
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Resolve
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onDismiss}>
-              <Eye className="h-3 w-3 mr-1" />
-              Dismiss
-            </Button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
