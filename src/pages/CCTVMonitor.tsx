@@ -63,7 +63,7 @@ export default function CCTVMonitor() {
 
       const { allFaces, frameBase64 } = await extractFacesFromMultipleFrames(
         video,
-        5, // Analyze 5 frames for better coverage
+        3, // Analyze 3 frames for speed
         (message) => setProgressMessage(message)
       );
 
@@ -87,16 +87,15 @@ export default function CCTVMonitor() {
 
       setProgressMessage(`Comparing ${allFaces.length} detected face(s) with database...`);
 
-      // Compare each detected face with missing persons
+      // Compare all detected faces in PARALLEL for speed
       const allMatches: any[] = [];
       
-      for (let i = 0; i < allFaces.length; i++) {
-        const face = allFaces[i];
-        setProgress(40 + (i / allFaces.length) * 50);
-        setProgressMessage(`Analyzing face ${i + 1}/${allFaces.length}...`);
+      setProgress(45);
+      setProgressMessage(`Analyzing ${allFaces.length} face(s) against database...`);
 
-        try {
-          const { data, error } = await supabase.functions.invoke("compare-faces", {
+      const faceResults = await Promise.allSettled(
+        allFaces.map((face, i) =>
+          supabase.functions.invoke("compare-faces", {
             body: {
               videoFrameBase64: face.faceImage,
               videoFilename: video.name,
@@ -104,18 +103,13 @@ export default function CCTVMonitor() {
               faceIndex: i + 1,
               totalFaces: allFaces.length,
             },
-          });
+          })
+        )
+      );
 
-          if (error) {
-            console.error(`Error comparing face ${i + 1}:`, error);
-            continue;
-          }
-
-          if (data.matches && data.matches.length > 0) {
-            allMatches.push(...data.matches);
-          }
-        } catch (err) {
-          console.error(`Error processing face ${i + 1}:`, err);
+      for (const result of faceResults) {
+        if (result.status === "fulfilled" && result.value.data?.matches?.length > 0) {
+          allMatches.push(...result.value.data.matches);
         }
       }
 
