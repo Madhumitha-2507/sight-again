@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, MapPin, Phone, Calendar, Trash2 } from "lucide-react";
+import { AgeProgressionDialog } from "@/components/AgeProgressionDialog";
 import { useNavigate } from "react-router-dom";
 import { useMissingPersons, MissingPerson } from "@/hooks/useMissingPersons";
 import { formatDistanceToNow } from "date-fns";
@@ -184,6 +185,10 @@ function PersonCard({ person, onDelete }: { person: MissingPerson; onDelete: (pe
             <Calendar className="h-4 w-4 flex-shrink-0" />
             <span>Added {formatDistanceToNow(new Date(person.created_at), { addSuffix: true })}</span>
           </div>
+        </div>
+
+        <div className="pt-3 mt-3 border-t">
+          <AgeProgressionDialog person={person} />
         </div>
       </CardContent>
     </Card>
