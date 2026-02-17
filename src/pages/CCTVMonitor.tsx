@@ -2,14 +2,41 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, Loader2, CheckCircle, AlertCircle, Trash2, Users, Scan } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useMissingPersons } from "@/hooks/useMissingPersons";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { extractFacesFromMultipleFrames, loadFaceDetectionModels, DetectedFace } from "@/utils/faceDetection";
+
+// Extract a frame from video at a given time as base64
+const extractFrameAsBase64 = (videoFile: File, timeSeconds: number): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    
+    video.onloadedmetadata = () => {
+      video.currentTime = Math.min(timeSeconds, video.duration - 0.1);
+    };
+
+    video.onseeked = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('No canvas context')); return; }
+      ctx.drawImage(video, 0, 0);
+      const base64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      URL.revokeObjectURL(video.src);
+      resolve(base64);
+    };
+
+    video.onerror = () => reject(new Error('Could not load video'));
+    video.src = URL.createObjectURL(videoFile);
+  });
+};
 
 export default function CCTVMonitor() {
   const { toast } = useToast();
@@ -19,17 +46,7 @@ export default function CCTVMonitor() {
   const [progress, setProgress] = useState(0);
   const [progressMessage, setProgressMessage] = useState("");
   const [results, setResults] = useState<any[]>([]);
-  const [detectedFaces, setDetectedFaces] = useState<DetectedFace[]>([]);
-  const [modelsLoaded, setModelsLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Preload face detection models on mount
-  useEffect(() => {
-    loadFaceDetectionModels()
-      .then(() => setModelsLoaded(true))
-      .catch(console.error);
-  }, []);
 
   const handleUpload = async () => {
     if (!video) {
@@ -53,61 +70,52 @@ export default function CCTVMonitor() {
     setIsProcessing(true);
     setProgress(0);
     setResults([]);
-    setDetectedFaces([]);
-    setProgressMessage("Starting analysis...");
+    setProgressMessage("Extracting frames from video...");
 
     try {
-      // Extract faces from multiple frames
+      // Extract 3 frames directly as base64 (no face-api.js needed)
       setProgress(10);
-      setProgressMessage("Extracting frames from video...");
+      const tempVideo = document.createElement('video');
+      tempVideo.preload = 'metadata';
+      const duration = await new Promise<number>((resolve, reject) => {
+        tempVideo.onloadedmetadata = () => resolve(tempVideo.duration);
+        tempVideo.onerror = () => reject(new Error('Could not load video'));
+        tempVideo.src = URL.createObjectURL(video);
+      });
+      URL.revokeObjectURL(tempVideo.src);
 
-      const { allFaces, frameBase64 } = await extractFacesFromMultipleFrames(
-        video,
-        3, // Analyze 3 frames for speed
-        (message) => setProgressMessage(message)
+      const frameCount = 3;
+      const frameTimes = Array.from({ length: frameCount }, (_, i) => 
+        (duration / (frameCount + 1)) * (i + 1)
       );
 
-      setDetectedFaces(allFaces);
-      setProgress(40);
-
-      if (allFaces.length === 0) {
-        toast({
-          title: "No Faces Detected",
-          description: "No faces were detected in the video. Try a different video with clearer faces.",
-          variant: "destructive",
-        });
-        setIsProcessing(false);
-        return;
-      }
-
-      toast({
-        title: "Faces Detected",
-        description: `Found ${allFaces.length} face(s) in the video. Comparing with database...`,
-      });
-
-      setProgressMessage(`Comparing ${allFaces.length} detected face(s) with database...`);
-
-      // Compare all detected faces in PARALLEL for speed
-      const allMatches: any[] = [];
+      setProgress(20);
+      setProgressMessage("Extracting frames...");
       
-      setProgress(45);
-      setProgressMessage(`Analyzing ${allFaces.length} face(s) against database...`);
+      const frames = await Promise.all(
+        frameTimes.map(t => extractFrameAsBase64(video, t))
+      );
 
-      const faceResults = await Promise.allSettled(
-        allFaces.map((face, i) =>
+      setProgress(40);
+      setProgressMessage(`Sending ${frames.length} frames to AI for analysis...`);
+
+      // Send all frames to backend in parallel
+      const allMatches: any[] = [];
+      const frameResults = await Promise.allSettled(
+        frames.map((frameBase64, i) =>
           supabase.functions.invoke("compare-faces", {
             body: {
-              videoFrameBase64: face.faceImage,
+              videoFrameBase64: frameBase64,
               videoFilename: video.name,
               location: "Uploaded via web interface",
               faceIndex: i + 1,
-              totalFaces: allFaces.length,
+              totalFaces: frames.length,
             },
           })
         )
       );
 
-      for (const result of faceResults) {
+      for (const result of frameResults) {
         if (result.status === "fulfilled" && result.value.data?.matches?.length > 0) {
           allMatches.push(...result.value.data.matches);
         }
@@ -119,13 +127,13 @@ export default function CCTVMonitor() {
       if (allMatches.length > 0) {
         toast({
           title: "🚨 Matches Found!",
-          description: `Found ${allMatches.length} potential match(es) from ${allFaces.length} faces! Check the Matches page for details.`,
+          description: `Found ${allMatches.length} potential match(es)! Check the Matches page.`,
           variant: "destructive",
         });
       } else {
         toast({
           title: "Analysis Complete",
-          description: `Analyzed ${allFaces.length} face(s). No matches found.`,
+          description: `Analyzed ${frames.length} frames. No matches found.`,
         });
       }
     } catch (error) {
@@ -171,12 +179,6 @@ export default function CCTVMonitor() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!modelsLoaded && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading face detection models...
-              </div>
-            )}
 
             <div className="space-y-2">
               <Label htmlFor="video">Video File</Label>
@@ -208,7 +210,6 @@ export default function CCTVMonitor() {
                   onClick={() => {
                     setVideo(null);
                     setResults([]);
-                    setDetectedFaces([]);
                     setProgress(0);
                   }}
                   disabled={isProcessing}
@@ -231,7 +232,7 @@ export default function CCTVMonitor() {
 
             <Button 
               onClick={handleUpload} 
-              disabled={!video || isProcessing || missingPersons.length === 0 || !modelsLoaded}
+              disabled={!video || isProcessing || missingPersons.length === 0}
               className="w-full"
             >
               {isProcessing ? (
@@ -256,34 +257,10 @@ export default function CCTVMonitor() {
               Analysis Status
             </CardTitle>
             <CardDescription>
-              Database: {missingPersons.length} missing person(s) | 
-              {detectedFaces.length > 0 && ` Detected: ${detectedFaces.length} face(s)`}
+              Database: {missingPersons.length} missing person(s)
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {detectedFaces.length > 0 && results.length === 0 && !isProcessing && (
-              <div className="mb-4 p-3 bg-muted rounded-lg">
-                <p className="text-sm font-medium mb-2">Detected Faces ({detectedFaces.length})</p>
-                <div className="flex flex-wrap gap-2">
-                  {detectedFaces.map((face, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={`data:image/jpeg;base64,${face.faceImage}`}
-                        alt={`Face ${index + 1}`}
-                        className="w-12 h-12 rounded-lg object-cover border-2 border-muted-foreground/20"
-                      />
-                      <Badge 
-                        variant="secondary" 
-                        className="absolute -bottom-1 -right-1 text-[10px] px-1"
-                      >
-                        {Math.round(face.confidence * 100)}%
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {results.length > 0 ? (
               <div className="space-y-4">
                 {results.map((result, index) => (
@@ -320,7 +297,7 @@ export default function CCTVMonitor() {
         </Card>
       </div>
 
-      <canvas ref={canvasRef} className="hidden" />
+      
 
       <Card>
         <CardHeader>
