@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/toaster";
+import sightagainLogo from "@/assets/sightagain-logo.png";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -27,7 +28,8 @@ const App = () => (
             <main className="flex-1">
               <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background px-6">
                 <SidebarTrigger />
-                <h1 className="text-lg font-semibold">Missing Person Identification System</h1>
+                <img src={sightagainLogo} alt="SightAgain Logo" className="h-7 w-7 rounded" />
+                <h1 className="text-lg font-semibold">SightAgain - Missing Person Detection</h1>
               </header>
               <div className="p-6">
                 <Routes>
