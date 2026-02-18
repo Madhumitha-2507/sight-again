@@ -1,4 +1,5 @@
 import { Home, Users, Camera, AlertCircle, Upload, BookOpen } from "lucide-react";
+import sightagainLogo from "@/assets/sightagain-logo.png";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -27,10 +28,13 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
-        <div className="p-4 border-b border-sidebar-border">
-          <h2 className="text-lg font-bold text-sidebar-foreground">
-            {open ? "FindMissing" : "FM"}
-          </h2>
+        <div className="p-4 border-b border-sidebar-border flex items-center gap-2">
+          <img src={sightagainLogo} alt="SightAgain Logo" className="h-8 w-8 rounded" />
+          {open && (
+            <h2 className="text-lg font-bold text-sidebar-foreground">
+              SightAgain
+            </h2>
+          )}
         </div>
         
         <SidebarGroup>
